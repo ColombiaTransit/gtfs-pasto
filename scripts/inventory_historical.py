@@ -39,9 +39,11 @@ with bundle.open("rb") as fp:
                     group = "rutas"
                 elif {"Nombre", "Descripcion", "Horario1"} <= ks and ("ID" in ks or "idBus" in ks):
                     group = "horariosTwo" if "Desde1" in ks else "horarios"
-                elif {"IDPARADERO", "NOMBRE", "RUTA"} <= ks:
+                elif {"Latitude", "Longitude", "Order", "Distance from Start", "Distance to Next", "Bearing", "Elevation"} <= ks:
+                    group = "geometry_points"
+                elif {"NOMBRE", "RUTA", "UBICACION", "X_COORD", "Y_COORD"} <= ks and ("ID" in ks or "IDPARADERO" in ks):
                     group = "paraderosAndRutas"
-                elif any(terms.search(str(k)) for k in ks):
+                elif len(ks) <= 40 and any(terms.search(str(k)) for k in ks):
                     group = "timing_candidates"
                 else:
                     continue
@@ -53,6 +55,29 @@ with bundle.open("rb") as fp:
 for group, rows in records.items():
     (out/(group+".json")).write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding="utf-8")
 lines = source.read_text(encoding="utf-8",errors="replace").splitlines()
+# Geometry objects share a function; preserve allocation order and inspect array boundaries.
+geometry = records["geometry_points"]
+groups = []
+for entry in geometry:
+    r = entry["record"]
+    if not groups or entry["function_id"] != groups[-1][-1]["function_id"] or r["Order"] <= groups[-1][-1]["record"]["Order"]:
+        groups.append([])
+    groups[-1].append(entry)
+geometry_summary = [{"index":i,"count":len(g),"first":g[0]["record"],"last":g[-1]["record"],"function_id":g[0]["function_id"]} for i,g in enumerate(groups)]
+(out/"geometry-groups-candidates.json").write_text(json.dumps(groups,ensure_ascii=False,indent=2))
+print("GEOMETRY_GROUPS",json.dumps(geometry_summary,ensure_ascii=False))
+# Export only relevant array construction and naming instructions, not the full application.
+shape_lines = [i for i,line in enumerate(lines) if "'Distance from Start'" in line and "'Latitude'" in line and "'Longitude'" in line]
+if shape_lines:
+    a,b=min(shape_lines),max(shape_lines)
+    boundaries=[]
+    for i in range(max(0,a-80),min(len(lines),b+180)):
+        line=lines[i]
+        if re.search(r"new Array\\(\\d+\\)|\\[['\x22][^'\x22]+['\x22]\\]\\s*=|\\b(?:C0?[1-9]|C1[0-6]|E0?[1-7])\\b",line) and i not in shape_lines:
+            boundaries.append({"line":i+1,"text":line.strip()[:250]})
+    (out/"geometry-array-evidence.json").write_text(json.dumps(boundaries,ensure_ascii=False,indent=2))
+    for row in boundaries[:150]:
+        print("GEOMETRY_REFERENCE",json.dumps(row,ensure_ascii=False))
 hits = [{"line":i+1,"text":line.strip()[:250]} for i,line in enumerate(lines) if terms.search(line)]
 report = {"counts":{k:len(v) for k,v in records.items()},"schema_count":len(schemas),"decode_errors":dict(errors),"top_schemas":[{"keys":list(k),"count":n} for k,n in schemas.most_common(35)],"samples":{k:[r["record"] for r in v[:3]] for k,v in records.items()},"string_hits":string_hits,"source_hits":hits,"limitations":"Literal object candidates only; dynamic assignments and actual frequency semantics not verified."}
 (out/"historical-report.json").write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
