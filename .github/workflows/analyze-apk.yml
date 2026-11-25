@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/analyze-apk.yml', 'scripts/extract_bundle.py', 'scripts/extract_records.py', 'scripts/analyze_dataset.py', 'scripts/inventory_datasets.py']
+    paths: ['.github/workflows/analyze-apk.yml', 'scripts/extract_bundle.py', 'scripts/extract_records.py', 'scripts/analyze_dataset.py', 'scripts/inventory_datasets.py', 'scripts/inspect_remaining.py']
 permissions:
   contents: read
 jobs:
@@ -41,6 +41,8 @@ jobs:
         run: python scripts/analyze_dataset.py research-output "$RUNNER_TEMP/ruti/ruti.js"
       - name: Inventory embedded datasets
         run: python scripts/inventory_datasets.py "$RUNNER_TEMP/ruti/index.android.bundle" research-output "$RUNNER_TEMP/ruti/ruti.js"
+      - name: Inspect remaining datasets and API usage
+        run: python scripts/inspect_remaining.py "$RUNNER_TEMP/ruti/ruti.js" research-output
       - name: Upload analysis reports
         if: always()
         uses: actions/upload-artifact@v4
