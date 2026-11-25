@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/analyze-apk.yml', 'scripts/extract_bundle.py']
+    paths: ['.github/workflows/analyze-apk.yml', 'scripts/extract_bundle.py', 'scripts/extract_records.py']
 permissions:
   contents: read
 jobs:
@@ -35,6 +35,8 @@ jobs:
           test -s ruti.hasm
           test -s ruti.js
           python -c 'import json,pathlib; print(json.dumps({p.name:p.stat().st_size for p in [pathlib.Path("ruti.hasm"),pathlib.Path("ruti.js")]}))' > "$GITHUB_WORKSPACE/research-output/decompilation-report.json"
+      - name: Extract transport records
+        run: python scripts/extract_records.py "$RUNNER_TEMP/ruti/index.android.bundle" research-output
       - name: Upload analysis reports
         if: always()
         uses: actions/upload-artifact@v4
