@@ -28,8 +28,9 @@ member, bundle = matches[0]
 if len(bundle) < 12 or bundle[:8] != bytes.fromhex("c61fbc03c103191f"):
     raise SystemExit("Not a Hermes bytecode bundle")
 version = struct.unpack_from("<I", bundle, 8)[0]
-if version != 96:
-    raise SystemExit(f"Expected Hermes v96, got {version}")
+expected = int(sys.argv[3]) if len(sys.argv) > 3 else 96
+if version != expected:
+    raise SystemExit(f"Expected Hermes v{expected}, got {version}")
 (out / "index.android.bundle").write_bytes(bundle)
 report = {
     "source_sha256": hashlib.sha256(raw).hexdigest(),
