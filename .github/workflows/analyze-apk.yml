@@ -1,0 +1,40 @@
+name: Analyze Ruti APK
+on:
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: Absolute path to local Ruti APK or XAPK on trusted runner
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: [self-hosted, ruti-analysis]
+    timeout-minutes: 30
+    env:
+      SOURCE_PATH: ${{ inputs.source_path }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up isolated Python environment and extract bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/ruti-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -m 700 "$OUT"
+          echo "RUTI_OUT=$OUT" >> "$GITHUB_ENV"
+          python3 -m venv "$OUT/venv"
+          "$OUT/venv/bin/python" -m pip install hermes-dec==0.1.2
+          "$OUT/venv/bin/python" scripts/extract_bundle.py "$SOURCE_PATH" "$OUT"
+      - name: Disassemble and decompile
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUTI_OUT/venv/bin/hbc-disassembler" "$RUTI_OUT/index.android.bundle" "$RUTI_OUT/ruti.hasm" > "$RUTI_OUT/disassembler.log" 2>&1
+          "$RUTI_OUT/venv/bin/hbc-decompiler" "$RUTI_OUT/index.android.bundle" "$RUTI_OUT/ruti.js" > "$RUTI_OUT/decompiler.log" 2>&1
+          test -s "$RUTI_OUT/ruti.hasm"
+          test -s "$RUTI_OUT/ruti.js"
+          echo "Decompilation completed. Outputs remain on the trusted runner."
+          echo "Local output: $RUTI_OUT"
