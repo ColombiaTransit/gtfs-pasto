@@ -63,3 +63,32 @@ if len(sys.argv)>2:
     print("Schedule logic references:",len(matches))
     for m in matches[:25]:
         print(json.dumps(m,ensure_ascii=False))
+
+    # Inspect non-literal uses of schedule fields and explicit day-label mappings.
+    field = re.compile(r"\b(?:Horario[123]|Desde[123]|Hasta[123]|horario[123]|desde[123]|hasta[123])\b")
+    label = re.compile(r"""['"](?:L-D|L-S|L-V|S|D-F|L”D|L”S|L”V|D”F)['"]""")
+    hits = []
+    for i,line in enumerate(lines):
+        if ("'ID':" in line and "'Nombre':" in line) or "CREATE TABLE" in line:
+            continue
+        if field.search(line) or label.search(line):
+            hits.append(i)
+    spans = []
+    for i in hits:
+        a,b=max(0,i-12),min(len(lines),i+13)
+        if spans and a<=spans[-1][1]:
+            spans[-1][1]=max(b,spans[-1][1])
+        else:
+            spans.append([a,b])
+    evidence = []
+    for a,b in spans:
+        block=lines[a:b]
+        # Remove large inline dataset literals; retain instructions.
+        block=[x[:500] for x in block if not ("'ID':" in x and "'Nombre':" in x)]
+        evidence.append({"start_line":a+1,"end_line":b,"context":block})
+    (root/"schedule-field-usage.json").write_text(json.dumps(evidence,ensure_ascii=False,indent=2))
+    print("Schedule field usage blocks:",len(evidence))
+    # Prioritize contexts with explicit day labels, then UI/database field reads.
+    ranked=sorted(evidence,key=lambda e: (not any(label.search(x) for x in e["context"]),not any("Horario1" in x for x in e["context"])))
+    for e in ranked[:30]:
+        print("FIELD_USAGE",json.dumps(e,ensure_ascii=False))
