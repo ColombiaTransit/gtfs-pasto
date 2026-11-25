@@ -1,0 +1,50 @@
+name: Analyze Ruti 12.0 (2023)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/analyze-ruti-2023.yml'
+      - 'scripts/inventory_historical.py'
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download and verify historical source
+        run: |
+          mkdir -p "$RUNNER_TEMP/ruti-old" research-output
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/ruti-old/source.apk" 'https://github.com/ColombiaTransit/gtfs-pasto/releases/download/source-ruti-12.0/Ruti%2BSETP_12.0_APKPure.apk'
+          echo "56822c26f89a0b8397f7b8e35d19699384ea0c770bb31c018527e7946018be23  $RUNNER_TEMP/ruti-old/source.apk" | sha256sum -c -
+          python scripts/extract_bundle.py "$RUNNER_TEMP/ruti-old/source.apk" "$RUNNER_TEMP/ruti-old" 90
+          cp "$RUNNER_TEMP/ruti-old/extraction-report.json" research-output/
+      - name: Install Hermes tools
+        run: python -m pip install hermes-dec==0.1.2
+      - name: Disassemble and decompile
+        run: |
+          cd "$RUNNER_TEMP/ruti-old"
+          hbc-disassembler index.android.bundle ruti.hasm
+          hbc-decompiler index.android.bundle ruti.js
+          test -s ruti.hasm
+          test -s ruti.js
+      - name: Extract historical datasets and inspect frequency evidence
+        run: python scripts/inventory_historical.py "$RUNNER_TEMP/ruti-old/index.android.bundle" "$RUNNER_TEMP/ruti-old/ruti.js" research-output
+      - name: Inventory embedded datasets
+        if: success()
+        run: python scripts/inventory_datasets.py "$RUNNER_TEMP/ruti-old/index.android.bundle" research-output "$RUNNER_TEMP/ruti-old/ruti.js"
+      - name: Upload historical analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruti-2023-analysis
+          path: research-output/
+          retention-days: 14
+          if-no-files-found: warn
