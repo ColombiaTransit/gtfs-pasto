@@ -1,5 +1,6 @@
 """Static extraction of transport objects; never execute application code."""
 import ast
+import math
 import collections
 import json
 import pathlib
@@ -18,8 +19,8 @@ schemas = collections.Counter()
 seen = set()
 
 def decode(buffer, offset, count, reader):
-    parts = unpack_slp_array(buffer[offset:], count, reader.header.version).to_strings(reader.strings)
-    return [None if p in ("null", "undefined") else True if p == "true" else False if p == "false" else ast.literal_eval(p) for p in parts]
+    parts = unpack_slp_array(buffer[offset:], count).to_strings(reader.strings)
+    return [None if p in ("null", "undefined", "nan", "inf", "-inf") else True if p == "true" else False if p == "false" else ast.literal_eval(p) for p in parts]
 
 with bundle.open("rb") as handle:
     reader = HBCReader()
