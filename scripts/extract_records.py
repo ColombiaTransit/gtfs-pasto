@@ -44,7 +44,7 @@ with bundle.open("rb") as handle:
             obj = dict(zip(keys, values))
             if ROUTE <= keyset:
                 group = "rutas"
-            elif SCHEDULE <= keyset:
+            elif {"Nombre", "Descripcion", "Orden", "Horario1"} <= keyset and ("ID" in keyset or "idBus" in keyset) and ({"Desde1", "Hasta1"} <= keyset or {"Desde", "Hasta"} <= keyset):
                 group = "horarios_candidates"
             else:
                 group = "partial_candidates"
@@ -62,6 +62,10 @@ report = {
     "route_ids": sorted({str(row["record"]["JRNYPATTRN_ID"]) for row in records["rutas"]}),
     "public_route_names": sorted({str(row["record"]["ROUT_NM"]) for row in records["rutas"]}),
     "stop_ids": len({str(row["record"]["DISP_STOPPOINT_ID"]) for row in records["rutas"]}),
+    "schedule_samples": [row["record"] for row in records["horarios_candidates"][:12]],
+    "route_samples": [row["record"] for row in records["rutas"][:3]],
+    "schedule_schema_counts": dict(collections.Counter("numbered_windows" if "Desde1" in row["record"] else "shared_window" for row in records["horarios_candidates"])),
+    "route_count": len({str(row["record"]["JRNYPATTRN_ID"]) for row in records["rutas"]}),
     "schedule_function_ids": sorted({row["function_id"] for row in records["horarios_candidates"]}),
     "limitations": "Literal objects only; dynamic property assignments, array membership and horarios versus horariosTwo still require verification."
 }
